@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">日期计数</string>
+    <string name="widget_name">日期计数插件</string>
+    <string name="widget_description">在桌面显示某个日期已经过去或还剩多少周、多少天。</string>
+    <string name="widget_loading">正在加载…</string>
+    <string name="widget_preview_title">毕业纪念日</string>
+    <string name="widget_preview_direction">已经过去</string>
+    <string name="widget_preview_count">12 周 3 天</string>
+    <string name="widget_preview_total">87 天</string>
+</resources>

@@ -1,0 +1,2 @@
+-keep class com.datecount.widget.data.** { *; }
+-keepattributes *Annotation*, InnerClasses
