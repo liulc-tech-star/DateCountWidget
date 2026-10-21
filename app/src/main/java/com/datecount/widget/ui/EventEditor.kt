@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.datecount.widget.data.DateEvent
 import com.datecount.widget.data.DisplayMode
+import com.datecount.widget.data.MAX_EVENT_TITLE_LENGTH
 import com.datecount.widget.data.calculateCount
 import java.time.Instant
 import java.time.LocalDate
@@ -58,7 +59,7 @@ fun EventEditorDialog(
     onDismiss: () -> Unit,
     onSave: (String, LocalDate, DisplayMode) -> Unit
 ) {
-    var title by remember { mutableStateOf(state.title) }
+    var title by remember { mutableStateOf(state.title.take(MAX_EVENT_TITLE_LENGTH)) }
     var date by remember { mutableStateOf(state.date) }
     var mode by remember { mutableStateOf(state.displayMode) }
     var showPicker by remember { mutableStateOf(false) }
@@ -70,14 +71,14 @@ fun EventEditorDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = title,
-                    onValueChange = { title = it },
+                    onValueChange = { title = it.take(MAX_EVENT_TITLE_LENGTH) },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("名称") },
                     placeholder = { Text("例如：毕业、生日、考试") },
                     singleLine = true
                 )
                 FilledTonalButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.CalendarMonth, contentDescription = null)
+                    Icon(Icons.Outlined.DateRange, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 6.dp))
                     Text(date.toString())
                 }
@@ -147,15 +148,8 @@ private fun PreviewLine(title: String, date: LocalDate, mode: DisplayMode) {
         buildString {
             append(preview.directionLabel)
             append(" ")
-            when (mode) {
-                DisplayMode.WEEKS_AND_DAYS -> append(preview.weeksAndDaysLabel)
-                DisplayMode.TOTAL_DAYS -> append(preview.totalDaysLabel)
-                DisplayMode.BOTH -> {
-                    append(preview.weeksAndDaysLabel)
-                    append(" · ")
-                    append(preview.totalDaysLabel)
-                }
-            }
+            append(preview.primaryLabel)
+            preview.secondaryLabel?.let { append(" · ").append(it) }
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant

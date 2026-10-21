@@ -3,6 +3,7 @@ package com.datecount.widget.widget
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -46,6 +47,7 @@ import com.datecount.widget.ui.EventEditorDialog
 import com.datecount.widget.ui.EventEditorState
 import com.datecount.widget.ui.EventViewModel
 import com.datecount.widget.ui.theme.DateCountTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -85,27 +87,55 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
+    // With singleTop the launcher can route a second widget's click into this instance.
+    // Recreating from the new intent stops appWidgetId from staying on the previous widget.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val incomingId = intent.getIntExtra(
+            AppWidgetManager.EXTRA_APPWIDGET_ID,
+            AppWidgetManager.INVALID_APPWIDGET_ID
+        )
+        if (incomingId == appWidgetId) return
+        setIntent(intent)
+        recreate()
+    }
+
     private fun bind(eventId: String) {
         lifecycleScope.launch {
-            DateCountWidgetReceiver.bindAndRefresh(applicationContext, appWidgetId, eventId)
-            setResult(
-                RESULT_OK,
-                Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            )
-            finish()
+            try {
+                DateCountWidgetReceiver.bindAndRefresh(applicationContext, appWidgetId, eventId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "Unable to bind widget $appWidgetId", error)
+            } finally {
+                finishWithWidget()
+            }
         }
     }
 
     private fun createAndBind(title: String, date: LocalDate, mode: DisplayMode) {
         lifecycleScope.launch {
-            val saved = application.asDateCountApp().events.save(null, title, date, mode)
-            DateCountWidgetReceiver.bindAndRefresh(applicationContext, appWidgetId, saved.id)
-            setResult(
-                RESULT_OK,
-                Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            )
-            finish()
+            try {
+                val saved = application.asDateCountApp().events.save(null, title, date, mode)
+                DateCountWidgetReceiver.bindAndRefresh(applicationContext, appWidgetId, saved.id)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "Unable to create and bind widget $appWidgetId", error)
+            } finally {
+                finishWithWidget()
+            }
         }
+    }
+
+    private fun finishWithWidget() {
+        setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
+        finish()
+    }
+
+    companion object {
+        private const val TAG = "WidgetConfigActivity"
     }
 }
 

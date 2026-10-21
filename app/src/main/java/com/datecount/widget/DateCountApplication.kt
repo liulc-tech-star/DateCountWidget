@@ -17,7 +17,9 @@ class DateCountApplication : Application() {
         events = EventRepository(this)
         widgetBindings = WidgetBindingStore(this)
         WidgetRefreshWorker.cancelLegacyPeriodicWork(this)
-        if (DateCountWidgetReceiver.widgetIds(this).isNotEmpty()) WidgetRefreshWorker.schedule(this)
+        val liveWidgetIds = DateCountWidgetReceiver.widgetIds(this).toSet()
+        widgetBindings.pruneMissingWidgets(liveWidgetIds)
+        if (liveWidgetIds.isNotEmpty()) WidgetRefreshWorker.schedule(this)
     }
 }
 

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.datecount.widget.asDateCountApp
 import com.datecount.widget.data.DisplayMode
 import com.datecount.widget.data.calculateCount
+import com.datecount.widget.widget.DateCountWidgetReceiver
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -26,14 +27,21 @@ class EventViewModel(application: Application) : AndroidViewModel(application) {
         displayMode: DisplayMode
     ) {
         viewModelScope.launch {
-            app.events.save(id, title, date, displayMode)
+            val saved = app.events.save(id, title, date, displayMode)
+            DateCountWidgetReceiver.refreshWidgets(
+                getApplication<Application>(),
+                app.widgetBindings.appWidgetIdsFor(saved.id)
+            )
         }
     }
 
     fun delete(id: String) {
         viewModelScope.launch {
             app.events.delete(id)
-            app.widgetBindings.removeEvent(id)
+            DateCountWidgetReceiver.refreshWidgets(
+                getApplication<Application>(),
+                app.widgetBindings.removeEvent(id)
+            )
         }
     }
 }

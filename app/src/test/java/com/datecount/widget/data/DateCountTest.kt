@@ -2,15 +2,20 @@ package com.datecount.widget.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
 class DateCountTest {
-    private fun event(dateIso: String) = DateEvent(
+    private fun event(
+        dateIso: String,
+        mode: DisplayMode = DisplayMode.BOTH
+    ) = DateEvent(
         id = "test-event",
         title = "Test date",
         dateIso = dateIso,
+        displayMode = mode,
         createdAtMillis = 0L
     )
 
@@ -73,5 +78,35 @@ class DateCountTest {
 
         assertEquals(2L, count.totalDays)
         assertEquals(2L, count.leftoverDays)
+    }
+
+    @Test
+    fun weeksAndDaysModeHasNoSecondaryLine() {
+        val count = calculateCount(
+            event("2026-09-22", DisplayMode.WEEKS_AND_DAYS),
+            LocalDate.of(2026, 9, 30)
+        )
+
+        assertEquals("1 周 1 天", count.primaryLabel)
+        assertNull(count.secondaryLabel)
+    }
+
+    @Test
+    fun totalDaysModeUsesTheTotalAsPrimary() {
+        val count = calculateCount(
+            event("2026-09-22", DisplayMode.TOTAL_DAYS),
+            LocalDate.of(2026, 9, 30)
+        )
+
+        assertEquals("8 天", count.primaryLabel)
+        assertNull(count.secondaryLabel)
+    }
+
+    @Test
+    fun bothModeShowsTheTotalAsSecondary() {
+        val count = calculateCount(event("2026-09-22", DisplayMode.BOTH), LocalDate.of(2026, 9, 30))
+
+        assertEquals("1 周 1 天", count.primaryLabel)
+        assertEquals("8 天", count.secondaryLabel)
     }
 }

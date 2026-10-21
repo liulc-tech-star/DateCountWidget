@@ -87,4 +87,22 @@ class WidgetRefreshPolicyTest {
         assertEquals(TimeUnit.HOURS.toMillis(12), nextMidnightDelayMillis(shanghai))
         assertEquals(TimeUnit.HOURS.toMillis(20), nextMidnightDelayMillis(utc))
     }
+
+    @Test
+    fun retriesAreBounded() {
+        assertTrue(shouldRetryRefresh(0))
+        assertTrue(shouldRetryRefresh(MAX_REFRESH_RETRIES - 1))
+        assertFalse(shouldRetryRefresh(MAX_REFRESH_RETRIES))
+        assertFalse(shouldRetryRefresh(MAX_REFRESH_RETRIES + 3))
+    }
+
+    @Test
+    fun unconfiguredWidgetIsSkippedUnlessForced() {
+        assertTrue(isUnconfiguredWidget(boundEventId = null, lastRefreshDay = null, force = false))
+        assertFalse(isUnconfiguredWidget(boundEventId = null, lastRefreshDay = null, force = true))
+        assertFalse(isUnconfiguredWidget(boundEventId = "event-a", lastRefreshDay = null, force = false))
+        assertFalse(
+            isUnconfiguredWidget(boundEventId = null, lastRefreshDay = today.toEpochDay(), force = false)
+        )
+    }
 }

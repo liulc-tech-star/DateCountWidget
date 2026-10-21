@@ -1,27 +1,25 @@
 package com.datecount.widget.data
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.time.LocalDate
 import java.util.UUID
 
-private val Context.eventStore by preferencesDataStore(name = "date_events")
+private val Context.eventStore by preferencesDataStore(
+    name = "date_events",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+)
 
 class EventRepository(private val context: Context) {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
-
     val events: Flow<List<DateEvent>> = context.eventStore.data.map { prefs ->
-        decode(prefs[EVENTS_KEY])
+        decodeEvents(prefs[EVENTS_KEY])
     }
 
     suspend fun getEvents(): List<DateEvent> = events.first()
@@ -37,29 +35,24 @@ class EventRepository(private val context: Context) {
         val existing = id?.let { getEvent(it) }
         val saved = DateEvent(
             id = existing?.id ?: UUID.randomUUID().toString(),
-            title = title.trim().ifBlank { "未命名日期" },
+            title = normalizeEventTitle(title),
             dateIso = date.toString(),
             displayMode = displayMode,
             createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis()
         )
         context.eventStore.edit { prefs ->
-            val current = decode(prefs[EVENTS_KEY])
+            val current = decodeEvents(prefs[EVENTS_KEY])
             val next = current.filterNot { it.id == saved.id } + saved
-            prefs[EVENTS_KEY] = json.encodeToString(next.sortedBy { it.createdAtMillis })
+            prefs[EVENTS_KEY] = encodeEvents(next.sortedBy { it.createdAtMillis })
         }
         return saved
     }
 
     suspend fun delete(id: String) {
         context.eventStore.edit { prefs ->
-            val current = decode(prefs[EVENTS_KEY])
-            prefs[EVENTS_KEY] = json.encodeToString(current.filterNot { it.id == id })
+            val current = decodeEvents(prefs[EVENTS_KEY])
+            prefs[EVENTS_KEY] = encodeEvents(current.filterNot { it.id == id })
         }
-    }
-
-    private fun decode(raw: String?): List<DateEvent> {
-        if (raw.isNullOrBlank()) return emptyList()
-        return json.decodeFromString(raw)
     }
 
     companion object {

@@ -36,6 +36,7 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.datecount.widget.asDateCountApp
 import com.datecount.widget.data.DateCount
 import com.datecount.widget.data.DisplayMode
@@ -161,71 +162,50 @@ private fun WidgetContent(count: DateCount?, appWidgetId: Int?) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (count == null) {
-            Text(
-                "点这里选择日期",
-                style = TextStyle(color = onBg, fontSize = metrics.titleSize, fontWeight = FontWeight.Medium)
-            )
+            WidgetText("点这里选择日期", onBg, metrics.titleSize, FontWeight.Medium)
             if (!metrics.compact) {
                 Spacer(GlanceModifier.height(metrics.gapMedium))
-                Text(
-                    "选好后会显示在桌面上。",
-                    style = TextStyle(color = muted, fontSize = metrics.dateSize)
-                )
+                WidgetText("选好后会显示在桌面上。", muted, metrics.dateSize)
             }
         } else {
-            Text(count.event.title, style = TextStyle(color = muted, fontSize = metrics.titleSize))
+            WidgetText(count.event.title, muted, metrics.titleSize)
             if (metrics.compact) {
                 Spacer(GlanceModifier.height(metrics.gapSmall))
-                Text(
-                    compactCountLine(count),
-                    style = TextStyle(color = onBg, fontSize = metrics.countSize, fontWeight = FontWeight.Bold)
-                )
+                WidgetText(compactCountLine(count), onBg, metrics.countSize, FontWeight.Bold)
             } else {
                 Spacer(GlanceModifier.height(metrics.gapMedium))
-                Text(
-                    count.directionLabel,
-                    style = TextStyle(color = accent, fontSize = metrics.directionSize, fontWeight = FontWeight.Medium)
-                )
+                WidgetText(count.directionLabel, accent, metrics.directionSize, FontWeight.Medium)
                 Spacer(GlanceModifier.height(metrics.gapSmall))
-                when (count.event.displayMode) {
-                    DisplayMode.WEEKS_AND_DAYS -> {
-                        Text(
-                            count.weeksAndDaysLabel,
-                            style = TextStyle(color = onBg, fontSize = metrics.countSize, fontWeight = FontWeight.Bold)
-                        )
-                    }
-                    DisplayMode.TOTAL_DAYS -> {
-                        Text(
-                            count.totalDaysLabel,
-                            style = TextStyle(color = onBg, fontSize = metrics.countSize, fontWeight = FontWeight.Bold)
-                        )
-                    }
-                    DisplayMode.BOTH -> {
-                        Text(
-                            count.weeksAndDaysLabel,
-                            style = TextStyle(color = onBg, fontSize = metrics.countSize, fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(GlanceModifier.height(metrics.gapSmall))
-                        Text(
-                            count.totalDaysLabel,
-                            style = TextStyle(color = muted, fontSize = metrics.secondarySize)
-                        )
-                    }
+                WidgetText(count.primaryLabel, onBg, metrics.countSize, FontWeight.Bold)
+                count.secondaryLabel?.let { label ->
+                    Spacer(GlanceModifier.height(metrics.gapSmall))
+                    WidgetText(label, muted, metrics.secondarySize)
                 }
                 Spacer(GlanceModifier.height(metrics.gapMedium))
-                Text(count.formattedDate, style = TextStyle(color = muted, fontSize = metrics.dateSize))
+                WidgetText(count.formattedDate, muted, metrics.dateSize)
             }
         }
     }
 }
 
-private fun compactCountLine(count: DateCount): String {
-    val body = when (count.event.displayMode) {
-        DisplayMode.TOTAL_DAYS -> count.totalDaysLabel
-        DisplayMode.WEEKS_AND_DAYS, DisplayMode.BOTH -> count.weeksAndDaysLabel
-    }
-    return if (count.isToday) body else "${count.directionLabel} $body"
+// Glance 1.1 exposes no TextOverflow API, so every line is pinned to a single line.
+// That keeps a long title from wrapping and pushing the count out of the fixed box.
+@Composable
+private fun WidgetText(
+    text: String,
+    color: ColorProvider,
+    size: TextUnit,
+    weight: FontWeight = FontWeight.Normal
+) {
+    Text(
+        text = text,
+        style = TextStyle(color = color, fontSize = size, fontWeight = weight),
+        maxLines = 1
+    )
 }
+
+private fun compactCountLine(count: DateCount): String =
+    if (count.isToday) count.primaryLabel else "${count.directionLabel} ${count.primaryLabel}"
 
 class DateCountWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = DateCountWidget()
@@ -269,11 +249,25 @@ class DateCountWidgetReceiver : GlanceAppWidgetReceiver() {
         fun widgetIds(context: Context): IntArray = AppWidgetManager.getInstance(context)
             .getAppWidgetIds(ComponentName(context, DateCountWidgetReceiver::class.java))
 
-        suspend fun refreshAllNow(context: Context, force: Boolean = false): Boolean {
+        suspend fun refreshAllNow(context: Context, force: Boolean = false): Boolean =
+            refreshEach(context, widgetIds(context).toList(), force)
+
+        // Editing or deleting an event must repaint the widgets bound to it right away,
+        // even when they were already refreshed today.
+        suspend fun refreshWidgets(context: Context, appWidgetIds: Collection<Int>) {
+            refreshEach(context, appWidgetIds, force = true)
+        }
+
+        private suspend fun refreshEach(
+            context: Context,
+            appWidgetIds: Collection<Int>,
+            force: Boolean
+        ): Boolean {
             var success = true
-            widgetIds(context).forEach { appWidgetId ->
+            val appContext = context.applicationContext
+            appWidgetIds.forEach { appWidgetId ->
                 try {
-                    refreshWidget(context, appWidgetId, force)
+                    refreshWidget(appContext, appWidgetId, force)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
@@ -287,7 +281,7 @@ class DateCountWidgetReceiver : GlanceAppWidgetReceiver() {
         suspend fun bindAndRefresh(context: Context, appWidgetId: Int, eventId: String) {
             val appContext = context.applicationContext
             appContext.asDateCountApp().widgetBindings.bind(appWidgetId, eventId)
-            refreshWidget(appContext, appWidgetId)
+            refreshWidget(appContext, appWidgetId, force = true)
             WidgetRefreshWorker.schedule(appContext)
         }
 
@@ -298,11 +292,10 @@ class DateCountWidgetReceiver : GlanceAppWidgetReceiver() {
         ) = refreshMutex.withLock {
             val bindings = context.asDateCountApp().widgetBindings
             val today = LocalDate.now()
-            if (bindings.eventIdFor(appWidgetId) == null &&
-                bindings.lastRefreshDayFor(appWidgetId) == null) return@withLock
-            if (!shouldRefreshWidget(bindings.lastRefreshDayFor(appWidgetId), today, force)) {
-                return@withLock
-            }
+            val boundEventId = bindings.eventIdFor(appWidgetId)
+            val lastRefreshDay = bindings.lastRefreshDayFor(appWidgetId)
+            if (isUnconfiguredWidget(boundEventId, lastRefreshDay, force)) return@withLock
+            if (!shouldRefreshWidget(lastRefreshDay, today, force)) return@withLock
             val manager = GlanceAppWidgetManager(context)
             val glanceId = awaitGlanceId(manager, appWidgetId)
                 ?: error("Widget $appWidgetId is not available")

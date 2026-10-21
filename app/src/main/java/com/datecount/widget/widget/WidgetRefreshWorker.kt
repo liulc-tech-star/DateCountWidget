@@ -20,20 +20,42 @@ class WidgetRefreshWorker(context: Context, parameters: WorkerParameters) :
 
     override suspend fun doWork(): Result {
         if (DateCountWidgetReceiver.widgetIds(applicationContext).isEmpty()) return Result.success()
-        return try {
-            if (!DateCountWidgetReceiver.refreshAllNow(applicationContext)) return Result.retry()
-            // Append the next midnight; replacing this work here would cancel the current worker.
-            schedule(applicationContext, ExistingWorkPolicy.APPEND_OR_REPLACE).await()
-            Result.success()
+        val refreshed = try {
+            DateCountWidgetReceiver.refreshAllNow(applicationContext)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.e("WidgetRefreshWorker", "Unable to refresh widgets", error)
-            Result.retry()
+            Log.e(TAG, "Unable to refresh widgets", error)
+            false
+        }
+
+        if (refreshed) {
+            scheduleNextMidnight()
+            return Result.success()
+        }
+        if (shouldRetryRefresh(runAttemptCount)) return Result.retry()
+
+        // Out of retries. The next midnight is appended as a continuation of this work,
+        // and WorkManager fails every continuation of a failed work — so this attempt has
+        // to report success, otherwise the daily chain dies with it.
+        Log.w(TAG, "Refresh failed after $runAttemptCount attempts; resuming at next midnight")
+        scheduleNextMidnight()
+        return Result.success()
+    }
+
+    private suspend fun scheduleNextMidnight() {
+        try {
+            // Append the next midnight; replacing this work here would cancel the current worker.
+            schedule(applicationContext, ExistingWorkPolicy.APPEND_OR_REPLACE).await()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.e(TAG, "Unable to schedule the next midnight refresh", error)
         }
     }
 
     companion object {
+        private const val TAG = "WidgetRefreshWorker"
         private const val WORK_NAME = "date_count_widget_midnight_refresh"
         private const val LEGACY_PERIODIC_WORK_NAME = "date_count_widget_refresh"
 

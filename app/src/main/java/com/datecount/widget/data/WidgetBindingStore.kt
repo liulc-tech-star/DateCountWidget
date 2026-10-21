@@ -7,9 +7,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-class WidgetBindingStore(context: Context) {
-    private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class WidgetBindingStore(private val prefs: SharedPreferences) {
+    constructor(context: Context) : this(
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    )
 
     fun bind(appWidgetId: Int, eventId: String) {
         prefs.edit().putString(key(appWidgetId), eventId).apply()
@@ -25,10 +26,27 @@ class WidgetBindingStore(context: Context) {
 
     fun eventIdFor(appWidgetId: Int): String? = prefs.getString(key(appWidgetId), null)
 
-    fun removeEvent(eventId: String) {
+    fun appWidgetIdsFor(eventId: String): List<Int> = widgetIdsBoundTo(prefs.all, eventId)
+
+    // Returns the affected widget ids so the caller can repaint them right away.
+    fun removeEvent(eventId: String): List<Int> {
+        val affected = appWidgetIdsFor(eventId)
+        if (affected.isEmpty()) return affected
         val editor = prefs.edit()
-        prefs.all.forEach { (storedKey, value) ->
-            if (storedKey.startsWith(KEY_PREFIX) && value == eventId) editor.remove(storedKey)
+        affected.forEach { editor.remove(key(it)) }
+        editor.apply()
+        return affected
+    }
+
+    // Drops every key whose appWidgetId is no longer owned by this app. Widget ids are
+    // reassigned by the host, so bindings restored from a backup — or left behind when
+    // onDeleted never arrived — must not survive into a new install.
+    fun pruneMissingWidgets(liveAppWidgetIds: Set<Int>) {
+        val stale = staleWidgetIds(prefs.all, liveAppWidgetIds)
+        if (stale.isEmpty()) return
+        val editor = prefs.edit()
+        stale.forEach { widgetId ->
+            editor.remove(key(widgetId)).remove(dayKey(widgetId)).remove(versionKey(widgetId))
         }
         editor.apply()
     }
@@ -56,14 +74,39 @@ class WidgetBindingStore(context: Context) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
-    private fun dayKey(appWidgetId: Int) = "day_" + appWidgetId
+    private fun dayKey(appWidgetId: Int) = DAY_KEY_PREFIX + appWidgetId
 
-    private fun versionKey(appWidgetId: Int) = "version_" + appWidgetId
+    private fun versionKey(appWidgetId: Int) = VERSION_KEY_PREFIX + appWidgetId
 
-    private fun key(appWidgetId: Int) = KEY_PREFIX + appWidgetId
+    private fun key(appWidgetId: Int) = BINDING_KEY_PREFIX + appWidgetId
 
     companion object {
         private const val PREFS_NAME = "widget_bindings"
-        private const val KEY_PREFIX = "w_"
     }
 }
+
+internal const val BINDING_KEY_PREFIX = "w_"
+internal const val DAY_KEY_PREFIX = "day_"
+internal const val VERSION_KEY_PREFIX = "version_"
+
+internal fun widgetIdsBoundTo(bindings: Map<String, *>, eventId: String): List<Int> =
+    bindings.entries.mapNotNull { (storedKey, value) ->
+        if (!storedKey.startsWith(BINDING_KEY_PREFIX) || value != eventId) return@mapNotNull null
+        storedKey.removePrefix(BINDING_KEY_PREFIX).toIntOrNull()
+    }
+
+internal fun widgetIdsInBindings(bindings: Map<String, *>): Set<Int> =
+    bindings.keys.mapNotNull { storedKey ->
+        when {
+            storedKey.startsWith(BINDING_KEY_PREFIX) ->
+                storedKey.removePrefix(BINDING_KEY_PREFIX).toIntOrNull()
+            storedKey.startsWith(DAY_KEY_PREFIX) ->
+                storedKey.removePrefix(DAY_KEY_PREFIX).toIntOrNull()
+            storedKey.startsWith(VERSION_KEY_PREFIX) ->
+                storedKey.removePrefix(VERSION_KEY_PREFIX).toIntOrNull()
+            else -> null
+        }
+    }.toSet()
+
+internal fun staleWidgetIds(bindings: Map<String, *>, liveAppWidgetIds: Set<Int>): Set<Int> =
+    widgetIdsInBindings(bindings) - liveAppWidgetIds

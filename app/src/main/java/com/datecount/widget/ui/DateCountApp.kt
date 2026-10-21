@@ -16,10 +16,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,7 +45,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.datecount.widget.data.DateCount
 import com.datecount.widget.data.DateEvent
-import com.datecount.widget.data.DisplayMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,7 +60,7 @@ fun DateCountApp(viewModel: EventViewModel = viewModel()) {
                 title = { Text("日期计数") },
                 actions = {
                     IconButton(onClick = { showHelp = true }) {
-                        Icon(Icons.Outlined.Widgets, contentDescription = "插件说明")
+                        Icon(Icons.Outlined.Info, contentDescription = "插件说明")
                     }
                 }
             )
@@ -147,7 +146,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector = Icons.Outlined.CalendarMonth,
+                imageVector = Icons.Outlined.DateRange,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -201,17 +200,13 @@ private fun EventCard(
                 Column {
                     Text(count.directionLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(4.dp))
-                    when (count.event.displayMode) {
-                        DisplayMode.WEEKS_AND_DAYS -> {
-                            Text(count.weeksAndDaysLabel, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        }
-                        DisplayMode.TOTAL_DAYS -> {
-                            Text(count.totalDaysLabel, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        }
-                        DisplayMode.BOTH -> {
-                            Text(count.weeksAndDaysLabel, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            Text(count.totalDaysLabel, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                    Text(count.primaryLabel, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    count.secondaryLabel?.let { label ->
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
